@@ -1,0 +1,83 @@
+---
+- name: upgrade and backup tasks
+  hosts: all
+  become: yes
+
+  vars_files:
+    - vault.yml
+
+  tasks:
+    - name: stop apache2
+      service:
+        name: apache2
+        state: stopped
+
+
+    - name: create the /var/www/HTMLBACKUP directory
+      file:
+        path: /var/www/HTMLBACKUP
+        state: directory
+        owner: root
+        group: root
+        mode: 0755
+
+    - name: create the /var/www/DATABASEBACKUP directory
+      file:
+        path: /var/www/DATABASEBACKUP
+        state: directory
+        owner: root
+        group: root
+        mode: 0755
+
+    - name: backup the /var/www/html directory into the /var/www/HTMLBACKUP directory
+      command: tar -czf /var/www/HTMLBACKUP/html_backup_{{ ansible_date_time.iso8601_basic }}.tar.gz -C /var/www html
+
+    - name: backup the database in the /var/www/DATABASEBACKUP directory
+      shell: mysqldump -u {{ mysql_user }} -p{{ mysql_password }} fch2 > /var/www/DATABASEBACKUP/fch2_backup_{{ ansible_date_time.iso8601_basic }}.sql 
+
+    - name: delete files in the /var/www/html directory
+      file:
+        path: /var/www/html
+        state: absent
+
+    - name: clone the xerdocsHMS familycare branch
+      git:
+        repo: https://github.com/XerdocsNG/XerdocsHMS.git
+        dest: /var/www/htm
+
+    - name: checkout the familycare branch
+      git:
+        repo: https://github.com/XerdocsNG/XerdocsHMS.git
+        dest: /var/www/html
+        version: familycare
+        force: yes
+
+    - name: delete the database.php file
+      file:
+        path: /var/www/html/application/config/database.php
+        state: absent
+
+    - name: copy database.php file
+      copy:
+        src: database.php
+        dest: /var/www/html/application/config/database.php
+
+    - name: copy xhms1.sql file
+      copy:
+        src: xhms1.sql
+        dest: /var/www/html
+
+    - name: copy xhms.zip file
+      copy:
+        src: xhms.zip
+        dest: /var/www/html
+
+    - name: delete index.html
+      file:
+        path: /var/www/html/index.html
+        state: absent
+
+    - name: restart apache
+      service:
+       name: apache2
+       state: restarted 
